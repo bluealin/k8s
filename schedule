@@ -1,11 +1,16 @@
 出自：https://blog.csdn.net/zhonglinzhang/article/details/77197834
 flag 干嘛的？
 找不到run（）函数  execute（）替代了？
-
+----------------------------------------------
+server.Run方法是cmd/kube-scheduler中最重要的方法：
+负责config的生成。
+并根据config创建sheduler对象。
+启动HTTP服务，提供/debug/pprof http接口方便进行性能数据收集调优，提供/metrics http接口以供prometheus收集监控数据。
+kube-scheduler自选举完成后立刻开始循环执行scheduler.Run进行调度。
 Scheduler 负责安排 Pod 到具体的Node，通过 API Server 提供的接口监听 Pods，获取待调度 pod，根据一系列的预选策略和优选策略给各
 个 Node 节点打分排序，然后将 Pod 调度到得分最高的 Node 节点上，然后由 kubelet 负责创建 Pod。
 Kubernetes 调度分为 Predicate（预选）和 Priority（优选），分为两个过程：
-
+------------------------------------------------------------------------
 预选：遍历所有 Node，按照预选筛选出符合要求的 Node，如果没有 Node 符合 Predicate 策略，那该 Pod 就会被挂起，直到有 Node 能够满足所有策略；
 优选，在第一步基础上，按照优选为待选 Node 打分，获取最高分；
 
