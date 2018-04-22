@@ -1,0 +1,34 @@
+        1.容器的启动命令可以在容器中设定，也可以在容器启动时覆盖？
+        2.证书认证？不部署在生产环境需要证书认证吗
+        3.启动参数设置到配置文件  还是直接在启动时加入命令--
+        4.Pod IP 虚拟的，，，.spec.hostNetwork=true----宿主机网络环境
+        
+        
+        
+        1.查询信息过滤：kubectl get pods mypod  --template={{.status.podIP}}
+        --template={{.status.phase}}
+        2.回调函数  PostStart  PreStop
+        exec
+        command：  在容器中执行指定指令
+        - cat
+        -  /tmp/health
+        httpGet:   发起http请求
+         host:IP
+         path:/tmp
+         port:8080
+         定义一个pod，设置回调函数
+         lifecycle：
+          postStart：--容器启动后拷贝
+           exec：
+            command：
+             - "cp"
+             - "/simple.war"
+             - "/app"
+           preStop:      ---容器结束前 发送一个警告？   http://monitor.com:8080/warning
+            htpGet:
+             host:monitor.com
+             path: /warning
+             port:8080
+             scheme:HTTP
+     
+        
