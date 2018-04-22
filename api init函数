@@ -1,8 +1,10 @@
 
 出自：http://www.lijiaocn.com/%E9%A1%B9%E7%9B%AE/2017/06/09/Kubernetes-api-def.html
+init()函数的装载通过install（）函数
 kubectl api-versions可以看到集群支持的api：
   api在pkg/api/和pkg/apis中定义, pkg/api目录中定义了pod等基础api，pkg/apis中定义的是扩展的api。
-  api是怎样被装载的？
+  api是怎样被装载的？   master 导入了api包   因此init()函数得以执行，完成api的装载。（kube-apiserver的代码cmd/kube-apiserver/app/server.go:67中导入了名为master的package:
+"k8s.io/kubernetes/pkg/master"，master的代码pkg/master/import_known_versions.go中导入了api/和apis/子目录中的install:）
 如果你仔细查看api/和apis/的子目录，会发现很多都有一个名为install的目录（不是全部)。
 
 这个目录中有一个名为install.go的文件，里面有这样一个init()函数：
@@ -13,9 +15,10 @@ func init() {
 
 func Install(groupFactoryRegistry announced.APIGroupFactoryRegistry, 
 		registry *registered.APIRegistrationManager, scheme *runtime.Scheme) {
-	...
+	...}
+	Install()将完成api的装载，但是这个过程比较复杂，在下一节中分析。
+问题是这些init()函数是什么时候给调用的？通过搜索、回溯代码发现了这个过程。
   kube-apiserver的代码cmd/kube-apiserver/app/server.go:67中导入了名为master的package:
-
 "k8s.io/kubernetes/pkg/master"
 master的代码pkg/master/import_known_versions.go中导入了api/和apis/子目录中的install:
 
@@ -114,17 +117,7 @@ func addKnownTypes(scheme *runtime.Scheme) error {
     scheme.AddKnownTypes(SchemeGroupVersion,
         &Pod{},
         &PodList{},
-        &PodStatusResult{},
-        &PodTemplate{},
-        &PodTemplateList{},
-        &ReplicationController{},
-        &ReplicationControllerList{},
-        &Service{},
-        &ServiceProxyOptions{},
-        &ServiceList{},
-        &Endpoints{},
-        &EndpointsList{},
-        &Node{},
+        
         &NodeList{},
         &NodeProxyOptions{},
         &Binding{},
