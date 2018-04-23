@@ -1,0 +1,74 @@
+应用构建和发布流程说明：
+
+    用户向Gitlab提交代码，代码中必须包含Dockerfile
+    将代码提交到远程仓库
+    用户在发布应用时需要填写git仓库地址和分支、服务类型、服务名称、资源数量、实例个数，
+    
+    确定后触发Jenkins自动构建
+    
+    Jenkins的CI流水线自动编译代码并打包成docker镜像推送到Harbor镜像仓库
+    Jenkins的CI流水线中包括了自定义脚本，根据我们已准备好的kubernetes的YAML模板，将其中的变量替换成用户输入的选项
+    生成应用的kubernetes YAML配置文件
+    
+    更新Ingress的配置，根据新部署的应用的名称，在ingress的配置文件中增加一条路由信息
+    更新PowerDNS，向其中插入一条DNS记录，IP地址是边缘节点的IP地址。关于边缘节点，请查看   边缘节点配置
+    Jenkins调用kubernetes的API，部署应用
+
+
+边缘节点定义
+
+首先解释下什么叫边缘节点（Edge Node），所谓的边缘节点即集群内部用来向集群外暴露服务能力的节点，集群外部的服务通过该节点来调
+用集群内部的服务，边缘节点是集群内外交流的一个Endpoint。
+
+边缘节点要考虑两个问题
+
+    边缘节点的高可用，不能有单点故障，否则整个kubernetes集群将不可用
+    对外的一致暴露端口，即只能有一个外网访问IP和端口
+    
+https://jimmysong.io/posts/creating-cloud-native-app-with-kubernetes/   详见：如何开发部署kubernetes native应用。
+-----------
+DEVOPS
+行动指南
+
+    根据环境（比如开发、测试、生产）划分namespace，也可以根据项目来划分
+    再为每个用户划分一个namespace、创建一个serviceaccount和kubeconfig文件，不同namespace间的资源隔离，目前不隔离网络，
+    不同namespace间的服务可以互相访问
+    创建yaml模板，降低编写kubernetes yaml文件编写难度
+    在kubectl命令上再封装一层，增加用户身份设置和环境初始化操作，简化kubectl命令和常用功能
+    管理员通过dashboard查看不同namespace的状态，也可以使用它来使操作更便捷
+    所有应用的日志统一收集到ElasticSearch中，统一日志访问入口
+    可以通过Grafana查看所有namespace中的应用的状态和kubernetes集群本身的状态
+    需要持久化的数据保存在分布式存储中，例如GlusterFS或Ceph中
+使用Kibana查看日志
+使用Grafana查看应用状态
+
+---------
+Kubernetes主要由以下几个核心组件组成：
+
+    etcd保存了整个集群的状态；
+    apiserver提供了资源操作的唯一入口，并提供认证、授权、访问控制、API注册和发现等机制；
+    controller manager负责维护集群的状态，比如故障检测、自动扩展、滚动更新等；
+    scheduler负责资源的调度，按照预定的调度策略将Pod调度到相应的机器上；
+    kubelet负责维护容器的生命周期，同时也负责Volume（CSI）和网络（CNI）的管理；
+    Container runtime负责镜像管理以及Pod和容器的真正运行（CRI）；
+    kube-proxy负责为Service提供cluster内部的服务发现和负载均衡；
+
+除了核心组件，还有一些推荐的Add-ons：
+
+    kube-dns负责为整个集群提供DNS服务
+    Ingress Controller为服务提供外网入口
+    Heapster提供资源监控
+    Dashboard提供GUI
+    Federation提供跨可用区的集群
+
+迁移到云架构
+
+迁移到云端架构，相对单体架构来说会带来很多挑战。比如自动的持续集成与发布、服务监控的变革、服务暴露、权限的管控等。
+这些具体细节请参考Kubernetes-handbook中的说明：https://jimmysong.io/kubernetes-handbook，在此就不细节展开，
+另外推荐一本我翻译的由Pivotal出品的电子书—
+—Migrating to Cloud Native Application Architectures，地址：https://jimmysong.io/migrating-to-cloud-native-application-architectures/。
+-----------------------
+
+当前最成熟最完整的微服务框架可以说非Spring莫属，而Spring又仅限于Java语言开发，
+其架构本身又跟Kubernetes存在很多重合的部分，如何探索将Kubernetes作为微服务架构平台就成为一个热点话题。
+
