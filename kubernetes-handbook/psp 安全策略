@@ -1,0 +1,58 @@
+创建 Pod 安全策略
+
+下面是一个 Pod 安全策略的例子，所有字段的设置都被允许：
+
+apiVersion: extensions/v1beta1
+kind: PodSecurityPolicy
+metadata:
+  name: permissive
+spec:
+  seLinux:
+    rule: RunAsAny
+  supplementalGroups:
+    rule: RunAsAny
+  runAsUser:
+    rule: RunAsAny
+  fsGroup:
+    rule: RunAsAny
+  hostPorts:
+  - min: 8000
+    max: 8080
+  volumes:
+  - '*'
+
+下载示例文件可以创建该策略，然后执行如下命令：
+
+$ kubectl create -f ./psp.yaml
+podsecuritypolicy "permissive" created
+
+获取 Pod 安全策略列表
+
+获取已存在策略列表，使用 kubectl get：
+
+$ kubectl get psp
+NAME        PRIV   CAPS  SELINUX   RUNASUSER         FSGROUP   SUPGROUP  READONLYROOTFS  VOLUMES
+permissive  false  []    RunAsAny  RunAsAny          RunAsAny  RunAsAny  false           [*]
+privileged  true   []    RunAsAny  RunAsAny          RunAsAny  RunAsAny  false           [*]
+restricted  false  []    RunAsAny  MustRunAsNonRoot  RunAsAny  RunAsAny  false           [emptyDir secret downwardAPI configMap persistentVolumeClaim projected]
+
+修改 Pod 安全策略
+
+通过交互方式修改策略，使用 kubectl edit：
+
+$ kubectl edit psp permissive
+
+该命令将打开一个默认文本编辑器，在这里能够修改策略。
+删除 Pod 安全策略
+
+一旦不再需要一个策略，很容易通过 kubectl 删除它：
+
+$ kubectl delete psp permissive
+podsecuritypolicy "permissive" deleted
+启用 Pod 安全策略
+
+为了能够在集群中使用 Pod 安全策略，必须确保如下：
+
+    启用 API 类型 extensions/v1beta1/podsecuritypolicy（仅对 1.6 之前的版本）
+    启用许可控制器 PodSecurityPolicy
+    定义自己的策略
