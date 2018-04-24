@@ -1,0 +1,224 @@
+Deployment 部署的副本 Pod 会分布在各个 Node 上，每个 Node 都可能运行好几个副本。
+DaemonSet 的不同之处在于：每个 Node 上最多只能运行一个副本。
+
+DaemonSet 的典型应用场景有：
+
+    在集群的每个节点上运行存储 Daemon，比如 glusterd 或 ceph。
+    在每个节点上运行日志收集 Daemon，比如 flunentd 或 logstash。
+    在每个节点上运行监控 Daemon，比如 Prometheus Node Exporter 或 collectd
+    
+     DaemonSet 确保全部（或者一些）Node 上运行一个 Pod 的副本。当有 Node 加入集群时，也会为他们新增一个 Pod 。
+     当有 Node 从集群移除时，这些 Pod 也会被回收。删除 DaemonSet 将会删除它创建的所有 Pod。
+     仅在相同的 Node 上运行 Pod
+
+如果指定了 .spec.template.spec.nodeSelector，DaemonSet Controller 将在能够匹配上 Node Selector 的 Node 上创建 Pod。
+类似这种情况，可以指定 .spec.template.spec.affinity，然后 DaemonSet Controller 将在能够匹配上 Node Affinity 的 Node 上创建 Pod。
+如果根本就没有指定，则 DaemonSet Controller 将在所有 Node 上创建 Pod。
+与 DaemonSet 中的 Pod 进行通信，几种可能的模式如下：
+
+    Push：配置 DaemonSet 中的 Pod 向其它 Service 发送更新，例如统计数据库。它们没有客户端。
+    NodeIP 和已知端口：DaemonSet 中的 Pod 可以使用 hostPort，从而可以通过 Node IP 访问到 Pod。
+    客户端能通过某种方法知道 Node IP 列表，并且基于此也可以知道端口。
+    DNS：创建具有相同 Pod Selector 的 Headless Service，然后通过使用 endpoints 资源或从 DNS 检索到多个 A 记录来发现 DaemonSet。
+    Service：创建具有相同 Pod Selector 的 Service，并使用该 Service 访问到某个随机 Node 上的 daemon。（没有办法访问到特定 Node）
+    
+    DaemonSet 与 Replication Controller 非常类似，它们都能创建 Pod，这些 Pod 都具有不期望被终止的进程（例如，Web 服务器、存储服务器）。
+    扩容：
+    kubectl scale deployment nginx-deployment --replicas 10
+    如果集群支持 horizontal pod autoscaling 的话，还可以为Deployment设置自动扩展：
+
+kubectl autoscale deployment nginx-deployment --min=10 --max=15 --cpu-percent=80
+
+更新镜像也比较简单:
+
+kubectl set image deployment/nginx-deployment nginx=nginx:1.9.1
+
+回滚：
+
+kubectl rollout undo deployment/nginx-deployment
+Deployment为Pod和Replica Set（下一代Replication Controller）提供声明式更新。
+
+您只需要在 Deployment 中描述您想要的目标状态是什么，Deployment controller 就会帮您将 Pod 和ReplicaSet 的实际状态改变到您的目标状态。
+您可以定义一个全新的 Deployment 来创建 ReplicaSet 或者删除已有的 Deployment 并创建一个新的来替换
+典型的用例如下：
+
+    使用Deployment来创建ReplicaSet。ReplicaSet在后台创建pod。检查启动状态，看它是成功还是失败。
+    然后，通过更新Deployment的PodTemplateSpec字段来声明Pod的新状态。这会创建一个新的ReplicaSet，
+    Deployment会按照控制的速率将pod从旧的ReplicaSet移动到新的ReplicaSet中。
+    如果当前状态不稳定，回滚到之前的Deployment revision。每次回滚都会更新Deployment的revision。
+    扩容Deployment以满足更高的负载。
+    暂停Deployment来应用PodTemplateSpec的多个修复，然后恢复上线。
+    根据Deployment 的状态判断上线是否hang住了。
+    清除旧的不必要的 ReplicaSet
+    
+    执行kubectl get rs和kubectl get pods会显示Replica Set（RS）和Pod已创建。
+
+$ kubectl get rs
+NAME                          DESIRED   CURRENT   READY   AGE
+nginx-deployment-2035384211   3         3         0       18s
+
+您可能会注意到 ReplicaSet 的名字总是<Deployment的名字>-<pod template的hash值>。
+
+$ kubectl get pods --show-labels
+NAME                                READY     STATUS    RESTARTS   AGE       LABELS
+nginx-deployment-2035384211-7ci7o   1/1       Running   0          18s       app=nginx,pod-template-hash=2035384211
+nginx-deployment-2035384211-kzszj   1/1       Running   0          18s       app=nginx,pod-template-hash=2035384211
+nginx-deployment-2035384211-qqcnn   1/1       Running   0          18s       app=nginx,pod-template-hash=2035384211
+
+刚创建的Replica Set将保证总是有3个 nginx 的 pod 存在
+
+Pod-template-hash label
+
+注意：这个 label 不是用户指定的！
+
+注意上面示例输出中的 pod label 里的 pod-template-hash label。当 Deployment 创建或者接管 ReplicaSet 时，
+Deployment controller 会自动为 Pod 添加 pod-template-hash label。这样做的目的是防止 Deployment 的子ReplicaSet
+的 pod 名字重复。通过将 ReplicaSet 的 PodTemplate 进行哈希散列，使用生成的哈希值作为 label 的值，并添加到 ReplicaSet selector 里、
+pod template label 和 ReplicaSet 管理中的 Pod 上。
+
+    
+    下载示例文件并执行命令：
+
+$ kubectl create -f https://kubernetes.io/docs/user-guide/nginx-deployment.yaml --record
+deployment "nginx-deployment" created
+更新Deployment
+注意： Deployment 的 rollout 当且仅当 Deployment 的 pod template（例如.spec.template）中的label更新或者镜像更改时被触发。其他更新，例如扩容Deployment不会触发 rollout。
+
+假如我们现在想要让 nginx pod 使用nginx:1.9.1的镜像来代替原来的nginx:1.7.9的镜像。
+
+$ kubectl set image deployment/nginx-deployment nginx=nginx:1.9.1
+deployment "nginx-deployment" image updated
+
+我们可以使用edit命令来编辑 Deployment，修改 .spec.template.spec.containers[0].image ，将nginx:1.7.9 改写成 nginx:1.9.1。
+
+$ kubectl edit deployment/nginx-deployment
+deployment "nginx-deployment" edited
+
+查看 rollout 的状态，只要执行：
+
+$ kubectl rollout status deployment/nginx-deployment
+Waiting for rollout to finish: 2 out of 3 new replicas have been updated...
+deployment "nginx-deployment" successfully rolled out
+
+Rollout 成功后，get Deployment：
+
+$ kubectl get deployments
+NAME               DESIRED   CURRENT   UP-TO-DATE   AVAILABLE   AGE
+nginx-deployment   3         3         3            3           36s
+
+UP-TO-DATE 的 replica 的数目已经达到了配置中要求的数目。
+
+CURRENT 的 replica 数表示 Deployment 管理的 replica 数量，AVAILABLE 的 replica 数是当前可用的replica数量。
+
+我们通过执行kubectl get rs可以看到 Deployment 更新了Pod，通过创建一个新的 ReplicaSet 并扩容了3个 replica，同时将原来的 ReplicaSet 缩容到了0个 replica。
+
+$ kubectl get rs
+NAME                          DESIRED   CURRENT   READY   AGE
+nginx-deployment-1564180365   3         3         0       6s
+nginx-deployment-2035384211   0         0         0       36s
+
+执行 get pods只会看到当前的新的 pod:
+
+$ kubectl get pods
+NAME                                READY     STATUS    RESTARTS   AGE
+nginx-deployment-1564180365-khku8   1/1       Running   0          14s
+nginx-deployment-1564180365-nacti   1/1       Running   0          14s
+nginx-deployment-1564180365-z9gth   1/1       Running   0          14s
+
+下次更新这些 pod 的时候，只需要更新 Deployment 中的 pod 的 template 即可
+
+-------------
+
+$ kubectl describe deployments
+Name:           nginx-deployment
+Namespace:      default
+CreationTimestamp:  Tue, 15 Mar 2016 12:01:06 -0700
+Labels:         app=nginx
+Selector:       app=nginx
+Replicas:       3 updated | 3 total | 3 available | 0 unavailable
+StrategyType:       RollingUpdate
+MinReadySeconds:    0
+RollingUpdateStrategy:  1 max unavailable, 1 max surge
+OldReplicaSets:     <none>
+NewReplicaSet:      nginx-deployment-1564180365 (3/3 replicas created)
+Events:
+  FirstSeen LastSeen    Count   From                     SubobjectPath   Type        Reason              Message
+  --------- --------    -----   ----                     -------------   --------    ------              -------
+  36s       36s         1       {deployment-controller }                 Normal      ScalingReplicaSet   Scaled up replica set nginx-deployment-2035384211 to 3
+  23s       23s         1       {deployment-controller }                 Normal      ScalingReplicaSet   Scaled up replica set nginx-deployment-1564180365 to 1
+  23s       23s         1       {deployment-controller }                 Normal      ScalingReplicaSet   Scaled down replica set nginx-deployment-2035384211 to 2
+  23s       23s         1       {deployment-controller }                 Normal      ScalingReplicaSet   Scaled up replica set nginx-deployment-1564180365 to 2
+  21s       21s         1       {deployment-controller }                 Normal      ScalingReplicaSet   Scaled down replica set nginx-deployment-2035384211 to 0
+  21s       21s         1       {deployment-controller }                 Normal      ScalingReplicaSet   Scaled up replica set nginx-deployment-1564180365 to 3
+  我们可以看到当我们刚开始创建这个 Deployment 的时候，创建了一个 ReplicaSet（nginx-deployment-2035384211），并直接扩容到了3个 replica。
+
+当我们更新这个 Deployment 的时候，它会创建一个新的 ReplicaSet（nginx-deployment-1564180365），将它扩容到1个replica，然后缩容原先的
+ReplicaSet 到2个 replica，此时满足至少2个 Pod 是可用状态，同一时刻最多有4个 Pod 处于创建的状态。
+
+接着继续使用相同的 rolling update 策略扩容新的 ReplicaSet 和缩容旧的 ReplicaSet。最终，将会在新的 ReplicaSet 中有3个可用的 replica，
+旧的 ReplicaSet 的 replica 数目变成0
+
+我们可以看到当我们刚开始创建这个 Deployment 的时候，创建了一个 ReplicaSet（nginx-deployment-2035384211），并直接扩容到了3个 replica。
+
+当我们更新这个 Deployment 的时候，它会创建一个新的 ReplicaSet（nginx-deployment-1564180365），将它扩容到1个replica，
+然后缩容原先的 ReplicaSet 到2个 replica，此时满足至少2个 Pod 是可用状态，同一时刻最多有4个 Pod 处于创建的状态。
+
+接着继续使用相同的 rolling update 策略扩容新的 ReplicaSet 和缩容旧的 ReplicaSet。最终，将会在新的 ReplicaSet 中有3个可用的 replica，
+旧的 ReplicaSet 的 replica 数目变成0
+【下次更新这些 pod 的时候，只需要更新 Deployment 中的 pod 的 template 即可。
+
+Deployment 可以保证在升级时只有一定数量的 Pod 是 down 的。默认的，它会确保至少有比期望的Pod数量少一个是up状态（最多一个不可用）。
+
+Deployment 同时也可以确保只创建出超过期望数量的一定数量的 Pod。默认的，它会确保最多比期望的Pod数量多一个的 Pod 是 up 的（最多1个 surge ）。
+
+在未来的 Kuberentes 版本中，将从1-1变成25%-25%。
+
+例如，如果您自己看下上面的 Deployment，您会发现，开始创建一个新的 Pod，然后删除一些旧的 Pod 再创建一个新的。
+当新的Pod创建出来之前不会杀掉旧的Pod。这样能够确保可用的 Pod 数量至少有2个，Pod的总数最多4个。】
+
+
+例如，假如您创建了一个有5个niginx:1.7.9 replica的 Deployment，但是当还只有3个nginx:1.7.9的 replica
+创建出来的时候您就开始更新含有5个nginx:1.9.1 replica 的 Deployment。在这种情况下，Deployment 会立即杀掉已创建的3个nginx:1.7.9的 Pod，
+并开始创建nginx:1.9.1的 Pod。它不会等到所有的5个nginx:1.7.9的 Pod 都创建完成后才开始改变航道。
+首先，检查下 Deployment 的 revision：
+
+$ kubectl rollout history deployment/nginx-deployment
+deployments "nginx-deployment":
+REVISION    CHANGE-CAUSE
+1           kubectl create -f https://kubernetes.io/docs/user-guide/nginx-deployment.yaml--record
+2           kubectl set image deployment/nginx-deployment nginx=nginx:1.9.1
+3           kubectl set image deployment/nginx-deployment nginx=nginx:1.91
+
+因为我们创建 Deployment 的时候使用了--record参数可以记录命令，我们可以很方便的查看每次 revision 的变化。
+
+查看单个revision 的详细信息：
+
+$ kubectl rollout history deployment/nginx-deployment --revision=2
+deployments "nginx-deployment" revision 2
+  Labels:       app=nginx
+          pod-template-hash=1159050644
+  Annotations:  kubernetes.io/change-cause=kubectl set image deployment/nginx-deployment nginx=nginx:1.9.1
+  Containers:
+   nginx:
+    Image:      nginx:1.9.1
+    Port:       80/TCP
+     QoS Tier:
+        cpu:      BestEffort
+        memory:   BestEffort
+    Environment Variables:      <none>
+  No volumes.
+
+回退到历史版本
+
+现在，我们可以决定回退当前的 rollout 到之前的版本：
+
+$ kubectl rollout undo deployment/nginx-deployment
+deployment "nginx-deployment" rolled back
+
+也可以使用 --revision参数指定某个历史版本：
+
+$ kubectl rollout undo deployment/nginx-deployment --to-revision=2
+deployment "nginx-deployment" rolled back
+
+
+
