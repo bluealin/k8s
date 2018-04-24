@@ -1,0 +1,35 @@
+kubernetes中的pause容器主要为每个业务容器提供以下功能：
+
+    在pod中担任Linux命名空间共享的基础；
+    启用pid命名空间，开启init进程。
+https://jimmysong.io/posts/what-is-a-pause-container/
+
+------------二者区别
+Understanding Init Containers【】
+
+A Pod can have multiple Containers running apps within it, but it can also have one or more
+Init Containers, which are run before the app Containers are started.
+
+Init Containers are exactly like regular Containers, except:
+
+    They always run to completion.
+    Each one must complete successfully before the next one is started.
+
+If an Init Container fails for a Pod, Kubernetes restarts the Pod repeatedly until the Init Container succeeds.
+However, if the Pod has a restartPolicy of Never, it is not restarted.
+
+
+Init Containers support all the fields and features of app Containers, including resource limits, volumes, and security settings. However, the resource requests and limits for an Init Container are handled slightly differently, which are documented in Resources below. Also, Init Containers do not support readiness probes because they must run to completion before the Pod can be ready.
+
+If multiple Init Containers are specified for a Pod, those Containers are run one at a time in sequential order. Each must succeed before the next can run. When all of the Init Containers have run to completion, Kubernetes initializes the Pod and runs the application Containers as usual.
+What can Init Containers be used for?
+
+Because Init Containers have separate images from app Containers, they have some advantages for start-up related code:
+
+    They can contain and run utilities that are not desirable to include in the app Container image for security reasons.
+    They can contain utilities or custom code for setup that is not present in an app image. For example, there is no need to make an image FROM another image just to use a tool like sed, awk, python, or dig during setup.
+    The application image builder and deployer roles can work independently without the need to jointly build a single app image.
+    They use Linux namespaces so that they have different filesystem views from app Containers. Consequently, they can be given access to Secrets that app Containers are not able to access.
+    They run to completion before any app Containers start, whereas app Containers run in parallel, so Init Containers provide an easy way to block or delay the startup of app Containers until some set of preconditions are met.
+
+Examples
