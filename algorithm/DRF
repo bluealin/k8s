@@ -1,0 +1,17 @@
+1.基本概念
+     在Mesos和YARN中，都用到了dominant resource fairness算法(DRF)，它不同于hadoop基于slot-based实现的fair scheduler和capacity scheduler，
+     论文阅读：Dominant Resource Fairness: Fair Allocation of Multiple Resource Types 。
+     考虑在一个包括多种资源类型(主要考虑CPU和MEM)的系统的公平资源分配问题，其中不同用户对资源有不同的需求。为了解决这个问题，伯克利的几位大牛提出了
+     Dominant Resource Fairness(DRF)，一种针对不同资源类型的max-min fairness。并且在Mesos的设计和实现中评估了DRF，显示了它可以比slot-based 
+     公平调度算法得到更好的吞吐量。
+
+    DRF是一种通用的多资源的max-min fairness分配策略。DRF背后的直观想法是在多环境下一个用户的资源分配应该由用户的dominant share（主导份额的资源）决定，
+    dominant share是在所有已经分配给用户的多种资源中，占据最大份额的一种资源。简而言之，DRF试图最大化所有用户中最小的dominant share。
+举个例子，假如用户A运行CPU密集的任务而用户B运行内存密集的任务，DRF会试图均衡用户A的CPU资源份额和用户B的内存资源份额。在单个资源的情形下，
+那么DRF就会退化为max-min fairness。
+   DRF有四种主要特性，分别是：sharing incentive、strategy-proofness、Pareto efficiency和envy-freeness。
+   DRF是通过确保系统的资源在用户之间是静态和均衡地进行分配来提供sharing incentive，用户不能获得比其他用户更多的资源。此外，DRF是strategy-proof，用户不能通过谎报其资源需求来获得更多的资源。DRF是Pareto-efficient，在满足其他特性的同时，分配所有可以利用的资源，不用取代现有的资源分配。最后，DRF是envy-free，用户不会更喜欢其他用户的资源分配
+strategy-proof，用户不能通过谎报其资源需求来获得更多的资源。DRF是Pareto-efficient，在满足其他特性的同时，分配所有可以利用的资源，
+   不用取代现有的资源分配。最后，DRF是envy-free，用户不会更喜欢其他用户的资源分配。
+   ------ 四种特性的目的：公平的分配资源
+    
