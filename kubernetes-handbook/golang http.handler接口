@@ -1,0 +1,177 @@
+HTTP
+http://www.sohu.com/a/217341401_99930294
+网络发展，很多网络应用都是构建再 HTTP 服务基础之上。HTTP 协议从诞生到现在，发展从1.0，1.1到2.0也不断再进步。除去细节，
+理解 HTTP 构建的网络应用只要关注两个端---客户端（clinet）和服务端（server），两个端的交互来自 clinet 的 request，以及server端的response。
+所谓的http服务器，主要在于如何接受 clinet 的 request，并向client返回response。
+
+接收request的过程中，最重要的莫过于路由（router），即实现一个Multiplexer器。Go中既可以使用内置的mutilplexer --- DefautServeMux，
+也可以自定义。Multiplexer路由的目的就是为了找到处理器函数（handler），后者将对request进行处理，同时构建response。
+
+简单总结就是这个流程为：
+
+    Clinet -> Requests -> [Multiplexer(router) -> handler -> Response -> Clinet
+
+▪ hander函数： 具有func(w http.ResponseWriter, r *http.Requests)签名的函数
+
+▪ handler处理器(函数): 经过HandlerFunc结构包装的handler函数，它实现了ServeHTTP接口方法的函数。调用handler处理器的ServeHTTP方法时，即调用handler函
+数本身。
+
+▪ handler对象：实现了Handler接口ServeHTTP方法的结构。
+
+    handler处理器和handler对象的差别在于，一个是函数，另外一个是结构，它们都有实现了ServeHTTP方法。很多情况下它们的功能类似，下文就使用统称为handler。
+    这算是Golang通过接口实现的类动态类型吧
+Handler
+
+Golang没有继承，类多态的方式可以通过接口实现。所谓接口则是定义声明了函数签名，任何结构只要实现了与接口函数签名相同的方法，就等同于实现了接口。go的http服务都是基于handler进行处理。
+
+type Handler interface { ServeHTTP(ResponseWriter, *Request)}
+
+任何结构体，只要实现了ServeHTTP方法，这个结构就可以称之为handler对象。ServeMux会使用handler并调用其ServeHTTP方法处理请求并返回响应。
+创建HTTP服务
+
+创建一个http服务，大致需要经历两个过程，首先需要注册路由，即提供url模式和handler函数的映射，其次就是实例化一个server对象，并开启对客户端的监听
+总结
+
+多数的web应用基于HTTP协议，客户端和服务器通过request-response的方式交互。一个server并不可少的两部分莫过于路由注册和连接处理。Golang通过一个
+ServeMux实现了的
+multiplexer路由多路复用器来管理路由。同时提供一个Handler接口提供ServeHTTP用来实现handler处理其函数，后者可以处理实际request并构造response。
+
+ServeMux和handler处理器函数的连接桥梁就是Handler接口。ServeMux的ServeHTTP方法实现了寻找注册路由的handler的函数，并调用该handler的ServeHTTP方法。
+ServeHTTP方法就是真正处理请求和构造响应的地方
+
+http://blog.51cto.com/8184160/2052853
+https://blog.csdn.net/secretx/article/details/51556648
+1.标准库接口定义
+ HandlerFunc
+ Handler
+
+type Handler interface {
+    ServeHTTP(ResponseWriter, *Request)  // 具体的逻辑函数
+}
+
+实现了handler接口的对象就意味着往server端添加了处理请求的逻辑
+handlerFunc是经常使用到的一个type
+
+/
+// 这里将HandlerFunc定义为一个函数类型，因此以后当调用a = HandlerFunc(f)之后, 调用a的ServeHttp实际上就是调用f的对应方法
+type HandlerFunc func(ResponseWriter, *Request)
+ 
+// ServeHTTP calls f(w, r).
+func (f HandlerFunc) ServeHTTP(w ResponseWriter, r *Request) {
+    f(w, r)
+}
+
+ 
+
+这里需要多回味一下了，这个HandlerFunc定义和ServeHTTP合起来是说明了什么？说明HandlerFunc的所有实例是实现了ServeHttp方法的。
+另，实现了ServeHttp方法就是什么？实现了接口Handler!
+package http
+
+type Handler interface {
+    ServeHTTP(w ResponseWriter, r *Request)
+}
+
+func ListenAndServe(address string, h Handler) error
+ListenAndServe函数需要一个例如“localhost:8000”的服务器地址，和一个处理所有请求的Handler接口实例。**它会一直运行**，直到这个服务因为一个错误而失败
+（或者启动失败），
+它的返回值一定是一个非空的错误。
+一直运行，监听：main
+    handler := MyHandler{"shoes": 50, "socks": 5}  生产一个句柄；Myhandler 是个map或者其他类型的一个变量（自定义）
+    这个自定义变量又实现了一个接口里的方法：func (self MyHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {}
+    这个方法会自动执行？？？？？只要调用了函数句柄这个变量，就会到这个方法里处理这个请求【方法处理事情的内容自己实现】
+    log.Fatal(http.ListenAndServe("localhost:8000", handler))
+    现在handler基于URL的路径部分（req.URL.Path）来决定执行什么逻辑。如果这个handler不能识别这个路径，
+    它会通过调用w.WriteHeader(http.StatusNotFound)返回客户端一个HTTP404错误
+    curl http://localhost:8000/list-路径
+    -------------------------------------
+    type dollars float32
+func (d dollars) String() string { return fmt.Sprintf("$%.2f", d) }
+
+type MyHandler map[string]dollars
+func (self MyHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+    switch req.URL.Path {
+        case "/list":
+            for item, price := range self {
+                fmt.Fprintf(w, "%s: %s\n", item, price)
+            }
+        case "/price":
+            item := req.URL.Query().Get("item")
+            price, ok := self[item]
+            if !ok {
+                w.WriteHeader(http.StatusNotFound) // 404
+                fmt.Fprintf(w, "no such item: %q\n", item)
+                return
+            }
+            fmt.Fprintf(w, "%s\n", price)
+        default:
+            w.WriteHeader(http.StatusNotFound) // 404
+            fmt.Fprintf(w, "no such page: %s\n", req.URL)
+    }
+}
+
+func main() {
+    handler := MyHandler{"shoes": 50, "socks": 5}
+    log.Fatal(http.ListenAndServe("localhost:8000", handler))
+}
+----------------------------
+显然我们可以继续向ServeHTTP方法中添加case，但在一个实际的应用中，将每个case中的逻辑定义到一个分开的方法或函数中会很实用。
+对于更复杂的应用，一个ServeMux将一批http.Handler聚集到一个
+单一的http.Handler中,通过组合来处理更加错综复杂的路由需求。
+
+--
+3.ServeMux.Handle改进版
+
+type MyHandler map[string]dollars
+func (self MyHandler) list(w http.ResponseWriter, req *http.Request) {
+    for item, price := range self {
+        fmt.Fprintf(w, "%s: %s\n", item, price)
+    }
+}
+func (self MyHandler) price(w http.ResponseWriter, req *http.Request) {
+    item := req.URL.Query().Get("item")
+    price, ok := self[item]
+    if !ok {
+        w.WriteHeader(http.StatusNotFound) // 404
+        fmt.Fprintf(w, "no such item: %q\n", item)
+        return
+    }
+    fmt.Fprintf(w, "%s\n", price)
+}
+
+func main() {
+    handler := MyHandler{"shoes": 50, "socks": 5}
+    mux := http.NewServeMux()
+    mux.Handle("/list", http.HandlerFunc(handler.list))
+    mux.Handle("/price", http.HandlerFunc(handler.price))
+    log.Fatal(http.ListenAndServe("localhost:8000", mux))
+}
+--------------
+语句http.HandlerFunc(handler.list)是一个转换而非一个函数调用，因为http.HandlerFunc是一个类型。它有如下的定义：
+package http
+
+type HandlerFunc func(w ResponseWriter, r *Request)
+
+func (f HandlerFunc) ServeHTTP(w ResponseWriter, r *Request) {
+    f(w, r)
+}
+HandlerFunc显示了在Go语言接口机制中一些不同寻常的特点。这是一个有实现了接口http.Handler方法的函数类型。ServeHTTP方法的行为调用了它本身的函数。
+因此HandlerFunc是一个让函数值满足一个接口的适配器(此处是http.Handler接口适配器,因为实现了ServeHTTP方法)，这里函数和这个接口仅有的方法有相同的函数
+签名。实际上，这个技巧让一个单一的类型例如MyHandler以多种方式满足http.Handler接口：一种通过它的list方法，一种通过它的price方法等等。
+4.
+因为段落3中ServeMux.Handle方式注册非常普遍，ServeMux有一个方便的HandleFunc方法(ServeMux.Handle的该进)，它帮我们简化handler注册代码成这样：
+mux.HandleFunc("/list", handler.list)
+mux.HandleFunc("/price", handler.price)
+所以为了方便，net/http包提供了一个全局的ServeMux实例DefaultServerMux和包级别的http.Handle和http.HandleFunc函数。现在，为了使用DefaultServeMux
+作为服务器的主handler，我们不需要将它传给ListenAndServe函数；nil值就可以工作。
+func main() {
+    handler := MyHandler{"shoes": 50, "socks": 5}
+    http.HandleFunc("/list", handler.list)
+    http.HandleFunc("/price", handler.price)
+    log.Fatal(http.ListenAndServe("localhost:8000", nil))
+}
+
+代码与段落3区别在于不手动创建ServeMux实例，而是使用net/http包的DefaultServerMux全局实例.
+
+基于并发考虑，web服务器应该在一个新的协程中调用每一个handler，所以当handler获取其它协程或者这个
+handler本身的其它请求也可以访问的变量时一定要使用预防措施比如锁机制。
+
