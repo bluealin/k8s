@@ -1,0 +1,36 @@
+RBAC：https://www.kubernetes.org.cn/1879.html
+Kubernetes 中的 RBAC 支持
+
+PS：在Kubernetes1.6版本中新增角色访问控制机制（Role-Based Access，RBAC）让集群管理员可以针对特定使用者或服务账号的角色，
+进行更精确的资源访问控制。在RBAC中，权限与角色相关联，用户通过成为适当角色的成员而得到这些角色的权限。这就极大地简化了权限的管理。
+在一个组织中，角色是为了完成各种工作而创造，用户则依据它的责任和资格来被指派相应的角色用户可以很容易地从一个角色被指派到另一个角色。
+目前 Kubernetes 中有一系列的鉴权机制。
+
+    https://kubernetes.io/docs/admin/authorization/
+
+鉴权的作用是，决定一个用户是否有权使用 Kubernetes API 做某些事情。它除了会影响 kubectl 等组件之外，还会对一些运行在集群内部并对集群进行操作的软件产生作用，例如使用了 Kubernetes 插件的 Jenkins，或者是利用 Kubernetes API 进行软件部署的 Helm。ABAC 和 RBAC 都能够对访问策略进行配置。
+
+ABAC（Attribute Based Access Control）本来是不错的概念，但是在 Kubernetes 中的实现比较难于管理和理解（怪我咯），而且需要对 Master 所在节点的 SSH 和文件系统权限，而且要使得对授权的变更成功生效，还需要重新启动 API Server。
+
+而****RBAC 的授权策略可以利用 kubectl 或者 Kubernetes API 直接进行配置。RBAC 可以授权给用户，让用户有权进行授权管理，这样就可以无需接触节点，直接进行授权管理。RBAC 在 Kubernetes 中被映射为 API 资源和操作。
+
+因为 Kubernetes 社区的投入和偏好，相对于 ABAC 而言，RBAC 是更好的选择。
+
+角色
+
+角色是一系列的权限的集合，例如一个角色可以包含读取 Pod 的权限和列出 Pod 的权限， ClusterRole 跟 Role 类似，但是可以在集群中到处使用
+（ Role 是 namespace 一级的）。
+
+角色绑定
+
+RoleBinding 把角色映射到用户，从而让这些用户继承角色在 namespace 中的权限。ClusterRoleBinding 让用户继承 ClusterRole 在整个集群中的权限
+    关于 RoleBinding 和 ClusterRoleBinding： https://kubernetes.io/docs/admin/authorization/rbac/#rolebinding-and-clusterrolebinding
+    Kubernetes 中的 RBAC
+
+RBAC 现在被 Kubernetes 深度集成，并使用他给系统组件进行授权。系统角色 (System Roles) 一般具有前缀system:，很容易识别：
+RBAC 系统角色已经完成足够的覆盖，让集群可以完全在 RBAC 的管理下运行。
+
+在 ABAC 到 RBAC 进行迁移的过程中，有些在 ABAC 集群中缺省开放的权限，在 RBAC 中会被视为不必要的授权，会对其进行降级。这种情况会影响到使用
+Service Account 的负载。ABAC 配置中，从 Pod 中发出的请求会使用 Pod Token，API Server
+会为其授予较高权限。例如下面的命令在 APAC 集群中会返回 JSON 结果，而在 RBAC 的情况下则会返回错误。
+http://www.infoq.com/cn/news/2015/06/CloudFlare-PKI-TLS
