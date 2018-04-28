@@ -1,0 +1,3 @@
+4月 28 08:56:13 master etcd[952]: serving insecure client requests on 127.0.0.1:2379, this is strongly discouraged!
+[ERROR Port-2379]: Port 2379 is in use
+[ERROR DirAvailable--var-lib-etcd]: /var/lib/etcd is not empty
