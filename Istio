@@ -1,0 +1,255 @@
+https://blog.csdn.net/ythunder/article/details/79842373
+Istio定义
+
+一个用来连接、管理和保护微服务的开放平台。
+Istio提供一种简单的方式来建立已部署服务网络，具备负载均衡、服务间认证、监控等功能，而不需要改动任何服务代码。
+想要为服务增加对Istio的支持，您只需要在环境中部署一个sidecar，使用Istio控制面板功能配置和管理代理，拦截微服务之间的所有网络通信。
+为什么需要Istio
+
+随着微服务出现，微服务的连接、管理和监控成为难题。Kubernetes 可以处理多个容器的工作负载，但当涉及更复杂的需求时，需要像Istio这样的微服务网格。
+Istio的主要功能
+
+    流量管理(Pilot)。控制服务之间的流量和API调用的流向，使得调用更灵活可靠，并使网络在恶劣情况下更加健壮。
+
+    可观察性。通过集成zipkin等服务，快速了解服务之间的依赖关系，以及它们之间流量的本质和流向，从而提供快速识别问题的能力。
+
+    策略执行(mixer)。将组织策略应用于服务之间的互动，确保访问策略得以执行，资源在消费者之间良好分配。策略的更改是通过配置网格而不是修改应用程序代码。
+
+    服务身份和安全(Istio-auth)。为网格中的服务提供可验证身份，并提供保护服务流量的能力，使其可以在不同可信度的网络上流转。
+
+除此之外，Istio针对可扩展性进行了设计，以满足不同的部署需要：
+
+    平台支持。Istio旨在可以在各种环境中运行，包括跨云、预置环境、Kubernetes、Mesos等。最初专注于Kubernetes，但很快将支持其他环境。
+    集成和定制。策略执行组件可以扩展和定制，以便与现有的ACL、日志、监控、配额、审核等解决方案集成。
+安装Istio
+安装过程
+
+//官网下载最新版本
+$ wget https://github.com/istio/istio/releases/download/0.7.1/istio-0.7.1-linux.tar.gz
+
+//解压，切换目录
+$ tar -zxvf istio-0.7.1-linux.tar.gz
+$ cd istio-0.7.1
+
+//通过yaml文件安装Istio
+$ kubectl apply -f install/kubernetes/istio.yaml
+
+或者使用TLS认证模式安装Istio
+$ kubectl apply -f install/kubernetes/istio-auth.yaml
+
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+    10
+    11
+    12
+    13
+
+解压文件内容
+
+    install/: K8s 使用 .yaml 文件
+    sample/: 简单的示例服务
+    bin/: istioctl命令,记得将其路径配置到环境变量
+
+安装成功检验
+
+首先已经部署了这些服务：
+
+[root@user ~]# kubectl get svc -n istio-system
+NAME            CLUSTER-IP       EXTERNAL-IP   PORT(S)                                                            AGE
+istio-ingress   192.168.30.166   <pending>     80:62495/TCP,443:21986/TCP                                         12d
+istio-mixer     192.168.30.238   <none>        9091/TCP,15004/TCP,9093/TCP,9094/TCP,9102/TCP,9125/UDP,42422/TCP   12d
+istio-pilot     192.168.30.107   <none>        15003/TCP,8080/TCP,9093/TCP,443/TCP                                12d
+
+    1
+    2
+    3
+    4
+    5
+
+查看容器是否启动正常
+
+[root@user ~]# kubectl get pods -n istio-system
+NAME                             READY     STATUS    RESTARTS   AGE
+istio-ca-59f6dcb7d9-fzvlk        1/1       Running   0          12d
+istio-ingress-779649ff5b-jhzrs   1/1       Running   1          12d
+istio-mixer-7f4fd7dff-jmgd7      3/3       Running   0          12d
+istio-pilot-5f5f76ddc8-lqtkk     2/2       Running   0          12d
+
+    1
+    2
+    3
+    4
+    5
+    6
+
+Istio安装成功
+Istio-Envoy
+
+Istio概念中提到，Istio就是一个功能较多的Service Mesh，Service Mesh在Istio中就是以envoy的形式出现。
+在服务中注入envoy
+自动注入
+
+启动istio-initalizer，之后使用kubectl create部署应用时，会自动向pod中注入envoy。
+
+//启动istio-initalizer
+kubectl create -f install/kubernetes/istio-initializer.yaml
+
+    1
+    2
+
+手动注入
+
+//istioctl命令更改配置文件
+$ istioctl  kube-inject  -f  <your-app>.yaml -o <your-app-addEnvoy>.yaml
+
+//部署应用
+$ kubectl create -f <your-app-addEnvoy>.yaml
+
+    1
+    2
+    3
+    4
+    5
+
+注入后的文件更改部分
+
+    Annotation： 标注了这一部署和pod是否已经被注入，被什么版本注入
+
+    proxy container ：此容器则是envoy代理的处理容器。容器里面有两个进程，父进程作为守护进程传入启动参数给子进程。子进程proxy负责转发流量
+    InitContainer: 容器初始化，对iptables做一些配置。使其跳过和proxy进程用户一致的用户进程的流量处理，跳过Loopback流量处理，其余所有流量
+    转发到15001端口
+
+Envoy 实现了过滤和路由，并在pilot,mixer协助下服务发现、健康检查，提供了具有弹性的负载均衡。
+Istio Pilot
+功能
+
+管理和配置部署在特定Istio服务网格中的所有Envoy代理实例。
+它允许您指定在Envoy代理之间使用什么样的路由流量规则，并配置故障恢复功能，如超时，重试和熔断器。
+它还维护了网格中所有服务的规范模型，并使用这个模型，来通过发现服务让Envoy了解网格中的其他实例。
+
+    Platform Adapter:平台适配器。负责针对多种集群管理平台实现必要的控制器来得到API server的DNS服务注册信息（即service名与podIP的对应表）、入口资源以及存储流量管理规则的第三方资源。
+    Abstract Model：维护了envoy中对service的规范表示。接收上层获取的service信息转化为规范模型。
+    Envoy API：下发服务发现、流量规则到envoy上。
+    Rules API：由运维人员管理。可通过API配置高级管理规则。
+Mixer
+
+Mixer在应用程序代码和基础架构后端之间提供通用中介层。
+基础架构包括访问控制系统，遥测捕获系统，配额执行系统，计费系统等。
+它的设计将策略决策移出应用层，用运维人员能够控制的配置取而代之。应用程序代码只与Mixer进行相当简单的集成，然后Mixer负责与后端系统连接。
+mixer基于属性
+
+属性是描述出口入口流量的有名称和类型的元数据片段。
+Mixer在运行时，接受一组属性，mixer根据配置处理传入的属性到适当的基础设置后端。
+功能
+
+    前期条件检查。 发生在请求处理前，请求被拦截到envoy时访问mixer。
+    允许服务在响应来自服务消费者的传入请求之前验证一些前提条件。前提条件可以包括服务使用者是否被正确认证，是否在服务的白名单上，是否通过ACL检查等等。
+
+    配额管理。 发生在请求处理中，服务中需要调用后端基础设施时。
+    使服务能够在分配和释放多个维度上的配额，配额这一简单的资源管理工具可以在服务消费者对有限资源发生争用时，提供相对公平的（竞争手段）。频率控制就是配额的一个实例。
+
+    遥测报告。发生在请求处理后，上报参考性数据给mixer。也因此，envoy拥有检查pod健康能力。
+    服务能够上报日志和监控。在未来，它还将启用针对服务运营商以及服务消费者的跟踪和计费流。
+    遥测报告是异步形式。即缓存多条上报一次。
+
+mixer如何适配基础设施后端
+
+Mixer在处理不同基础设施后端的灵活性是通过使用通用插件模型实现的。
+单个的插件被称为适配器，它们允许Mixer与不同的基础设施后端连接，这些后台可提供核心功能，例如日志，监控，配额，ACL检查等。适配器使Mixer能够暴露一个一致的独立于后端的API。
+通过配置能够决定在运行时使用的确切的适配器套件，并且可以轻松指向新的或定制的基础设施后端
+Istio 服务无法访问外网问题：
+
+缺省情况下，启用了Istio的服务是无法访问外部URL的，这是因为Pod中的iptables把所有外发传输都转向到了Sidecar代理，而这一代理只处理集群内的访问目标。
+我们可在Istio集群中使用两种方式来访问外部服务：
+
+    使用Egress规则。
+    配置Istio Sidecar，在他的iptables中排除对外部IP的控制。
+    Egress 规则
+
+通过执行Egress规则，允许执行特定的外部服务。
+
+1 . HTTP服务：
+
+cat <<EOF | istioctl create -f -
+ apiVersion: config.istio.io/v1alpha2
+ kind: EgressRule
+ metadata:
+   name: httpbin-egress-rule
+ spec:
+   destination:
+     service: httpbin.org
+   ports:
+     - port: 80
+       protocol: http
+ EOF
+
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+    10
+    11
+    12
+
+发出请求到HTTP服务：
+
+$ curl http://httpbin.org/headers
+
+    1
+
+    HTTPS服务：
+
+cat <<EOF | istioctl create -f -
+ apiVersion: config.istio.io/v1alpha2
+ kind: EgressRule
+ metadata:
+   name: google-egress-rule
+ spec:
+   destination:
+     service: www.google.com
+   ports:
+     - port: 443
+       protocol: https
+ EOF
+
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+    10
+    11
+    12
+
+发出请求到HTTPS服务：（ISTIO 内部仅支持HTTP，）
+
+$ curl http://www.google.com:443
+
+    1
+
+配置Istio Sidecar
+让指定IP范围直接穿透Istio，就需对源服务的Envoy Sidecar进行配置，阻止其对外部请求的拦截。
+
+通过--includeIPRanges指定。
+
+$ kubectl apply -f <(istioctl kube-inject -f samples/sleep/sleep.yaml --includeIPRanges=10.0.0.1/24)
+
+    1
+
+IPranges即service的IP范围，在kube-api_server.service中通过–service-cluster-ip-range指定
