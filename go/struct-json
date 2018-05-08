@@ -1,0 +1,63 @@
+https://blog.csdn.net/qq_27682041/article/details/78789577
+https://blog.csdn.net/qq_27682041/article/details/78789577
+https://dave.cheney.net/2014/03/25/the-empty-struct
+What can you do with an empty struct
+
+True to Go’s orthogonality, an empty struct is a struct type like any other. All the properties you are used to with normal structs apply equally to the empty struct.
+
+You can declare an array of structs{}s, but they of course consume no storage.
+
+var x [1000000000]struct{}
+fmt.Println(unsafe.Sizeof(x)) // prints 0
+
+http://play.golang.org/p/0lWjhSQmkc
+
+Slices of struct{}s consume only the space for their slice header. As demonstrated above, their backing array consumes no space.
+
+var x = make([]struct{}, 1000000000)
+fmt.Println(unsafe.Sizeof(x)) // prints 12 in the playground
+
+http://play.golang.org/p/vBKP8VQpd8
+
+Of course the normal subslice, len, and cap builtins work as expected.
+
+var x = make([]struct{}, 100)
+var y = x[:50]
+fmt.Println(len(y), cap(y)) // prints 50 100
+
+
+This property is also observable for []struct{}s.
+
+a := make([]struct{}, 10)
+b := make([]struct{}, 20)
+fmt.Println(&a == &b)       // false, a and b are different slices
+fmt.Println(&a[0] == &b[0]) // true, their backing arrays are the same
+
+http://play.golang.org/p/oehdExdd96
+
+Why is this? Well if you think about it, empty structs contain no fields, so can hold no data. If empty structs hold no data, it is not possible to determine if two struct{} values are different. They are in effect, fungible.
+
+a := struct{}{} // not the zero value, a real new struct{} instance
+b := struct{}{}
+fmt.Println(a == b) // true
+
+http://play.golang.org/p/K9qjnPiwM8
+
+note: this property is not required by the spec, but it does note that "Two distinct zero-size variables may have the same address in memory."
+struct{} as a method receiver
+
+Now we’ve demonstrated that empty structs behave just like any other type, it follows that we may use them as method receivers.
+
+type S struct{}
+
+func (s *S) addr() { fmt.Printf("%p\n", s) }
+
+func main() {
+        var a, b S
+        a.addr() // 0x1beeb0
+        b.addr() // 0x1beeb0
+}
+
+http://play.golang.org/p/YSQCczP-Pt
+
+In this example it shows that the address of all zero sized values is 0x1beeb0. The exact address will probably vary for different versions of Go.
