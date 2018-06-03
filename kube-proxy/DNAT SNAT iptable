@@ -1,0 +1,160 @@
+ 一、SNAT源地址转换。------------内网主机想上网   比如 访问百度   电脑ip1  访问百度ip2   在路由器后  POSTROUTING 规则后
+ 内网ip1 想上网   对外部显示的是ip2的ip访问的
+
+------------
+定义在POSTROUTING链上
+
+
+  iptables -t nat -A postrouting -s 内部网络地址或主机地址 -j SNAT --to-source NAT服务器上的某外部地址
+
+
+另外一个target
+
+
+MASQUERADE地址伪装（适用于PPPOE拨号上网，假设eth1是出口）
+
+
+iptables -t nat -A postrouting -s 内部网络或主机地址 -o eth1 -j MASQUERADE
+-------------------------------
+ DNAT：主要用于内部服务器被外网访问（发布服务）-------访问的是NAT服务器的ip（公开的）  转换为内网服务器ip
+
+定义在PREROUTING
+
+
+iptables -t nat -A PREROUTING -d NAT服务器的某外部地址 -p 某协议 --dport 某端口 -j DNAT --to-destination 内网服务器地址[:port]
+
+
+
+注意：NAT服务器需要打开数据转发
+
+
+echo 1 > /proc/sys/net/ipv4/ip_forward
+
+
+或者修改/etc/sysctl.conf net.ipv4.ip_forward = 1
+---------------------
+
+
+1、原理：在路由器后（PSOTROUTING）将内网的ip地址修改为外网网卡的ip地址。
+
+2、应用场景：共享内部主机上网。
+
+3、设置SNAT：网关主机进行设置。
+
+ （1）设置ip地址等基本信息。
+
+ （2）开启路由功能：
+
+ sed -i '/ip-forward/s/0/1/g'
+
+ sysctl -p 
+
+ （3）编写规则：
+
+ iptables -t nat -I POSTROUTING -o 外网网卡 -s 内网网段 -j SNAT --to-source 外网ip地址  #适用于外网ip地址固定场景
+
+ iptables -t nat -I POSTROUTING -o 外网网卡 -s 内网网段 -j MASQUERADE  #适用于共享动态ip地址上网（如adsl拨号，dhcp获取外网ip）
+
+（4）做好安全控制：使用FORWARD时机进行控制，严格设置INPUT规则。
+
+
+二、DNAT目的地址转换：
+
+1、原理：在路由前（PREROUTING）将来自外网访问网关公网ip及对应端口的目的ip及端口修改为内部服务器的ip及端口，实现发布内部服务器。
+
+2、应用场景：发布内部主机服务。
+
+3、设置DNAT：网关主机上设置。
+
+（1）设置ip、开启路由、设置SNAT
+
+（2）编写防火墙规则：
+
+iptables -t nat -I PREROUTING -i 外网网卡 -d 外网ip tcp --dport 发布的端口 -j DNAT --to-destination 内网服务ip:端口
+
+
+
+-----------
+ 实验一：
+
+SNAT
+
+
+规划主机A 作为SNAT server
+
+
+eth0 ip地址172.20.1.10（外部地址），eth1 192.168.1.1（内部地址）
+
+
+主机B当做局域网内主机
+
+
+eth0 ip地址192.168.1.2 默认路由要指向192.168.1.1
+
+
+SNAT server：
+
+[root@localhost ~]# iptables -t nat -A POSTROUTING -s 192.168.1.0/24 -j SNAT --to-source 172.20.1.10
+-s 192.168.1.0/24  它网段发出的请求   最后都变成--to-source 172.20.1.10 发出的请求
+
+#上面和我们实例操作相同
+
+
+[root@localhost ~]# echo 1 > /proc/sys/net/ipv4/ip_forward
+
+
+主机B ping外部的其它主机（172.20.1.20模拟互联网上的主机）
+
+---------
+DNAT
+ [root@nat ~]# iptables -t nat -A PREROUTING -d 10.1.249.125 -p tcp --dport 80 -j DNAT --to-destination 192.168.2.4
+访问-d 10.1.249.125  通过NAT转化  都变成访问--to-destination 192.168.2.4
+Chain PREROUTING (policy ACCEPT)
+
+target     prot opt source               destination         
+
+DNAT       tcp  --  0.0.0.0/0            10.1.249.125        tcp dpt:80 to:192.168.2.4
+
+
+
+
+ 实体案例
+
+
+我们有一台机器A可以上外网，配置eth0=192.168.1.1,eth1=222.13.56.192
+
+
+有6台机器只有内网IP ，分别是192.168.1.102~192.168.1.108,想让这6台机器通过机器A上网
+
+
+在机器A 防火墙上配置如下即可
+
+
+/sbin/iptables -t nat -I POSTROUTING -s 192.168.1.101 -j SNAT --to-source 222.13.56.192
+
+/sbin/iptables -t nat -I POSTROUTING -s 192.168.1.102 -j SNAT --to-source 222.13.56.192
+
+/sbin/iptables -t nat -I POSTROUTING -s 192.168.1.103 -j SNAT --to-source 222.13.56.192
+
+/sbin/iptables -t nat -I POSTROUTING -s 192.168.1.104 -j SNAT --to-source 222.13.56.192
+
+/sbin/iptables -t nat -I POSTROUTING -s 192.168.1.105 -j SNAT --to-source 222.13.56.192
+
+/sbin/iptables -t nat -I POSTROUTING -s 192.168.1.108 -j SNAT --to-source 222.13.56.192
+
+
+
+在 6台机器上路由显示
+
+
+route  -n
+
+Kernel IP routing table
+
+Destination     Gateway         Genmask         Flags Metric Ref    Use Iface
+
+192.168.1.0     0.0.0.0         255.255.255.0   U     0      0        0 em1
+
+169.254.0.0     0.0.0.0         255.255.0.0     U     1002   0        0 em1
+
+0.0.0.0         192.168.1.1   0.0.0.0         UG    0      0        0 em1
