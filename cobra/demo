@@ -1,0 +1,163 @@
+使用cobra生成应用程序
+
+假设现在我们要开发一个基于CLIs的命令程序，名字为demo。首先打开CMD，切换到GOPATH的src目录下[^1]，执行如下指令：
+[^1]:cobra.exe只能在GOPATH目录下执行
+src> ..\bin\cobra.exe init demo
+
+
+在src目录下会生成一个demo的文件夹，如下：
+
+▾ demo
+    ▾ cmd/
+        root.go
+    main.go
+    如果你的demo程序没有subcommands，那么cobra生成应用程序的操作就结束了。
+    
+    
+    如何实现没有子命令的CLIs程序
+
+接下来就是可以继续demo的功能设计了。例如我在demo下面新建一个包，名称为imp。如下：
+
+▾ demo
+    ▾ cmd/
+        root.go
+    ▾ imp/
+        imp.go
+        imp_test.go
+    main.go
+
+imp.go文件的代码如下：
+
+package imp
+
+import(
+    "fmt"
+)
+
+func Show(name string, age int) {
+    fmt.Printf("My Name is %s, My age is %d\n", name, age)
+}
+
+demo程序成命令行接收两个参数name和age，然后打印出来。打开cobra自动生成的main.go文件查看：
+
+package main
+
+import "demo/cmd"
+
+func main() {
+    cmd.Execute()
+}
+
+可以看出main函数执行cmd包，所以我们只需要在cmd包内调用imp包就能实现demo程序的需求。接着打开root.go文件查看：
+从源代码来看cmd包进行了一些初始化操作并提供了Execute接口。十分简单，其中viper是cobra集成的配置文件读取的库，这里不需要使用，我们可以注释掉（不注释可能生成的应用程序很大约10M，这里没哟用到最好是注释掉）。cobra的所有命令都是通过cobra.Command这个结构体实现的。为了实现demo功能，显然我们需要修改RootCmd。修改后的代码如下：
+
+// Copyright © 2016 NAME HERE <EMAIL ADDRESS>
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+--------新加入的代码前  ******于是就有了
+>demo.exe
+Demo is a test appcation for print things
+
+Usage:
+  demo [flags]
+
+Flags:
+  -a, --age int       person's age
+  -h, --help          help for demo
+  -n, --name string   person's name
+
+>demo -n borey --age 26
+My Name is borey, My age is 26
+---------------------
+package cmd
+
+import (
+    "fmt"
+    "os"
+
+    "github.com/spf13/cobra"
+    //  "github.com/spf13/viper"
+***"demo/imp"
+)
+
+****//var cfgFile string
+var name string
+var age int
+
+// RootCmd represents the base command when called without any subcommands
+var RootCmd = &cobra.Command{
+    Use:   "demo",
+    Short: "A test demo",
+    Long:  `Demo is a test appcation for print things`,
+    // Uncomment the following line if your bare application
+    // has an action associated with it:
+****Run: func(cmd *cobra.Command, args []string) {
+        if len(name) == 0 {
+            cmd.Help()
+            return
+        }
+        imp.Show(name, age)
+    },
+}
+
+// Execute adds all child commands to the root command sets flags appropriately.
+// This is called by main.main(). It only needs to happen once to the rootCmd.
+func Execute() {
+    if err := RootCmd.Execute(); err != nil {
+        fmt.Println(err)
+        os.Exit(-1)
+    }
+}
+
+func init() {
+    //  cobra.OnInitialize(initConfig)
+
+    // Here you will define your flags and configuration settings.
+    // Cobra supports Persistent Flags, which, if defined here,
+    // will be global for your application.
+
+    //  RootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.demo.yaml)")
+    // Cobra also supports local flags, which will only run
+    // when this action is called directly.
+    //  RootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+   **** RootCmd.Flags().StringVarP(&name, "name", "n", "", "person's name")
+***RootCmd.Flags().IntVarP(&age, "age", "a", 0, "person's age")
+}
+
+
+
+如何实现带有子命令的CLIs程序
+
+在执行cobra.exe init demo之后，继续使用cobra为demo添加子命令test：
+
+src\demo>..\..\bin\cobra add test
+test created at C:\Users\liubo5\Desktop\transcoding_tool\src\demo\cmd\test.go
+
+在src目录下demo的文件夹下生成了一个cmd\test.go文件，如下：
+
+▾ demo
+    ▾ cmd/
+        root.go
+        test.go
+    main.go
+    
+    src\demo>demo test -h
+A longer description that spans multiple lines and likely contains examples
+and usage of using your command. For example:
+
+Cobra is a CLI library for Go that empowers applications.
+This application is a tool to generate the needed files
+to quickly create a Cobra application.
+
+Usage:
+  demo test [flags]
