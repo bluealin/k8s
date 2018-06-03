@@ -1,0 +1,62 @@
+demo
+    ▾ cmd/
+        root.go
+    main.go
+    
+    
+    
+    ▾ demo
+    ▾ cmd/
+        root.go
+    ▾ imp/
+        imp.go
+        imp_test.go
+    main.go
+    ------------------
+    package imp
+
+import(
+    "fmt"
+)
+
+func Show(name string, age int) {
+    fmt.Printf("My Name is %s, My age is %d\n", name, age)
+}
+
+----------------
+cmd
+
+var name string
+var age int
+var RootCmd = &cobra.Command{
+    Run: func(cmd *cobra.Command, args []string) {
+        if len(name) == 0 {
+            cmd.Help()
+            return
+        }
+        imp.Show(name, age)    
+    },}
+    
+    func init() {
+        RootCmd.Flags().StringVarP(&name, "name", "n", "", "person's name")
+    RootCmd.Flags().IntVarP(&age, "age", "a", 0, "person's age")
+    }
+    
+    
+    cobra由三部分构成：commands，arguments 和 flags
+
+commands：表示要执行的动作。每一个command表示应用程序的一个动作。每个命令可以包含子命令。 rootCmd
+
+arguments：给动作传入的参数。myname
+
+flags：表示动作的行为。可以设置执行动作的行为。flags包括两种：对某个命令生效和对所有命令生效。 -n  -h  -a
+
+
+cobra add version
+
+cmd文件夹下生成一个新的文件version.go，定义这个新的命令的动作。--run（）
+
+文件内容如下：
+ Run: func(cmd *cobra.Command, args []string) {  
+        fmt.Println("version called")  
+    },  
