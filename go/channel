@@ -1,0 +1,53 @@
+取的操作先于放
+c:=make(chan bool)
+go func(){
+ fmt.Println("")
+    c<- true
+    close(c)  //for循环才会结束
+}
+for v:=range c{
+    fmt.Println(v)
+}
+
+
+取的操作先于放
+c:=make(chan bool)
+go func(){
+ fmt.Println("")
+  <-c
+}
+c<-true
+
+也是可以的  因为c中的true取出  c才会close
+但是如果c:=make(chan bool，1)  就没用了 1可以缓存一个，go func 还没执行  main函数就结束了
+
+正确的
+
+c:=make(chan bool)
+go func(){
+ fmt.Println("烦烦烦")
+
+  c<-true
+}
+  <-c
+  
+  有缓存：异步----放进去了 不取也没关系，（提前结束）就异步了
+  当知道缓存个数和任务routine个数，可以设置有缓存的同步，
+ 
+  无缓存：同步阻塞的
+  
+  runtime.GOMAXPROCS(runtime.NumCPU())---cpu的核数
+  c:=make(chan bool,10)   c 满10个才可以取
+  for  quchu10次
+  <-c
+  
+  
+  sync  Tongbubao
+  wg:=sync.WAitGroup()
+  wg.Add(10)  10个任务
+  wg.Done()     10-1=9   goroutine
+  wg.wait()    0的时候就可以了等待结束了  main
+  
+  
+  
+  
